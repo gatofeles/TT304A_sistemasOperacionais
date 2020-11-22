@@ -1,28 +1,44 @@
 /*
+
 Trabalho Final da Disciplina Sistemas Operacionais - TT304
+Equipe: Cerulean
+Membro: Wagner Alexandre Martins Junior RA: 148222
 
+Programa destinado à solução do problema 2 do trabalho final.
 
-Lembre: $gcc arquivo.c -lpthread -o arqexe
+** A compilação do programa deve ser realizada a partir da utilização
+do compilador Gnu Compiler Collection (GNU), a partir da utilização do
+seguinte comando:  gcc tarefa2.c -lpthread -o nomeDoArquivoDeSaida .
+
 */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
+#include <pthread.h>//Biblioteca para criação de Threads.
 #include <unistd.h>
 
 #define N 20
 int contPostIt = 0; 
-pthread_mutex_t semaforoViagem = PTHREAD_MUTEX_INITIALIZER;
+
+//Semáforo utilizado para acordar o pombo.
+pthread_mutex_t semaforoViagem = PTHREAD_MUTEX_INITIALIZER; 
+
+//Semáforo utilizado para que dois usuários não colem mensagens ao mesmo tempo.
 pthread_mutex_t semaforoMensagem = PTHREAD_MUTEX_INITIALIZER;
+
+//Semáforo que sinaliza que o pombo está ausente.
 pthread_mutex_t semaforoAusenciaDoPombo = PTHREAD_MUTEX_INITIALIZER;
 
+/*Método que define por quanto tempo o usuário
+permanecerá inativo.*/
 void dorme_aleatorio(){
 
-    int tempoDeSono = rand()%10;
+    int tempoDeSono = rand()%4;
     sleep(tempoDeSono);
 
 }
 
+/* Método que define o tempo de viagem do pombo.*/
 void leva_mochila_ate_B_e_volta(){
 
     int tempoDeViagem = rand()%4;
@@ -30,14 +46,17 @@ void leva_mochila_ate_B_e_volta(){
 
 }
 
+/* Este método foi inserido para que o usuário
+   indique sua intenção de colocar o post it. */
 void ColaPostIt(int id){
 
-    printf("Usuário %d quer escrever.\n", id + 1);
+    printf("Usuário %d quer colar o post it.\n", id + 1);
     pthread_mutex_lock(&semaforoMensagem);
-    
-    
+        
 }
 
+
+/* Método que define o comportamento do usuário. */
 void* usuario(void *arg) {
 
     int *id = (int*)arg;
@@ -48,41 +67,41 @@ void* usuario(void *arg) {
         dorme_aleatorio();
         ColaPostIt(*id);
         contPostIt++;
-        printf("Id %d Escreveu a mensagem: %d.\n", *id + 1, contPostIt);
+        printf("Usuário %d colou a mensagem: %d.\n", *id + 1, contPostIt);        
         
-        //Teste
-        if(contPostIt > 20)
-        {
-            printf("Algo saiu errado.\n");
-            exit(-1);
-        }
-        
-
         if (contPostIt == N)
         {   
-            
+
             printf("mochila cheia\n");
             
-            //pthread_mutex_lock(&semaforoMensagem);
-            pthread_mutex_lock(&semaforoAusenciaDoPombo);
-            pthread_mutex_unlock(&semaforoViagem);
+            pthread_mutex_lock(&semaforoAusenciaDoPombo);//Indica que o pombo estará ausente.
+            pthread_mutex_unlock(&semaforoViagem);//Usuário acorda o pombo.
+
+            /* A passagem por este ponto só será permitida após o retorno do pombo
+            bloqueando o acesso à bolsa.*/
             pthread_mutex_lock(&semaforoAusenciaDoPombo);
                           
         }
 
+        /*Após o retorno do pombo, as mensagens podem ser coladas na bolsa
+        novamente*/
         pthread_mutex_unlock(&semaforoMensagem);
+        /* Semáforo de ausência do pombo é resetado para indicar que o mesmo está
+        presente.*/
         pthread_mutex_unlock(&semaforoAusenciaDoPombo);
+
     }
 
     return NULL;
 }
 
-
+/* Método que define o comportamento do pombo. */
 void* pombo(void *arg) {
 
     while(1){
+        /*Após ser acordado por um usuário, o 
+        pombo bloqueia o semáforo viagem e entrega as mensagens.*/
         pthread_mutex_lock(&semaforoViagem);
-        
         printf("Pombo voando. Pruu...\n");
         leva_mochila_ate_B_e_volta();
         contPostIt = 0;
@@ -93,7 +112,7 @@ void* pombo(void *arg) {
         printf("Pombo Voltou.\n");
         sleep(1);
         pthread_mutex_unlock(&semaforoAusenciaDoPombo);
-        //pthread_mutex_unlock(&semaforoMensagem);
+        
     }
 
     return NULL;
@@ -102,28 +121,27 @@ void* pombo(void *arg) {
 
 int main(){
 
-    pthread_t threadPombo;
+    pthread_t threadPombo;//Thread do pombo.
     int numeroDeUsuarios;
+    /*Semáforo para acordar o pombo inicializado no estado down.*/
     pthread_mutex_lock(&semaforoViagem);
-    //pthread_mutex_lock(&semaforoAusenciaDoPombo)
-   
-
+    
     printf("Escolha o numero de usuários: \n");
     scanf("%d", &numeroDeUsuarios);
 
-    pthread_t threadUsuarios[numeroDeUsuarios];
-    int aux[numeroDeUsuarios];
+    pthread_t threadUsuarios[numeroDeUsuarios];//Vetor de threads dos usuários.
+    int aux[numeroDeUsuarios];//Vetor usado para armazenar o Id dos usuários.
 
-    pthread_create(&threadPombo, NULL, pombo, NULL);
+    pthread_create(&threadPombo, NULL, pombo, NULL);//Inicialização da thead pombo.
 
+    /*Inicialização das threads de usuário, passando a identificação como parâmetro.*/
     for(int i = 0; i < numeroDeUsuarios; i++)
     {
         aux[i] = i;
         pthread_create(&threadUsuarios[i], NULL, usuario, &aux[i]);
     }
 
-    pthread_join(threadPombo, NULL);
+    pthread_join(threadPombo, NULL);//Impede que o programa encerre antes de a thread encerrar.
     
-
     return 0;
 }
